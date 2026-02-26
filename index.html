@@ -12,19 +12,40 @@
         <h1>NFL Game Predictor</h1>
     </header>
 
-    <!-- Navigation menu for easy access to different sections -->
-    <nav>
-        <ul>
-            <li><a href="#home">Home</a></li>
-            <li><a href="#predictions">Predictions</a></li>
-            <li><a href="#stats">Statistics</a></li>
-            <li><a href="#about">About</a></li>
-        </ul>
-    </nav>
-
     <main>
-        <!-- Button to  display games -->
+        <!-- Controls for selecting games -->
         <div class="controls">
+            <label for="weekSelect">Select Week:</label>
+            <select id="weekSelect">
+                <option value="current">Current Week</option>
+                <optgroup label="Regular Season">
+                    <option value="1">Week 1</option>
+                    <option value="2">Week 2</option>
+                    <option value="3">Week 3</option>
+                    <option value="4">Week 4</option>
+                    <option value="5">Week 5</option>
+                    <option value="6">Week 6</option>
+                    <option value="7">Week 7</option>
+                    <option value="8">Week 8</option>
+                    <option value="9">Week 9</option>
+                    <option value="10">Week 10</option>
+                    <option value="11">Week 11</option>
+                    <option value="12">Week 12</option>
+                    <option value="13">Week 13</option>
+                    <option value="14">Week 14</option>
+                    <option value="15">Week 15</option>
+                    <option value="16">Week 16</option>
+                    <option value="17">Week 17</option>
+                    <option value="18">Week 18</option>
+                </optgroup>
+                <optgroup label="Playoffs">
+                    <option value="19">Wild Card</option>
+                    <option value="20">Divisional</option>
+                    <option value="21">Conference Championships</option>
+                    <option value="22">Super Bowl</option>
+                </optgroup>
+                <option value="full">Full Season</option>
+            </select>
             <button id="loadGamesBtn">Load Games</button>
         </div>
 
