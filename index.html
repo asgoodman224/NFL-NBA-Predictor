@@ -11,7 +11,6 @@
     <header>
         <h1>NFL Game Predictor</h1>
     </header>
-
     <!-- Navigation bar -->
     <nav>
         <ul>
@@ -60,6 +59,77 @@
         <!-- Container where all the game predictions will show up -->
         <div id="gamesContainer">
             <!-- Game cards will be loaded here when you click the button -->
+        </div>
+
+        <!-- Custom Game Predictor Section (hidden by default) -->
+        <div id="customGameContainer">
+            <h2 class="custom-game-title">Custom Historical Matchup</h2>
+            <p class="custom-game-subtitle">Pit any NFL team from any year (1970-present) against another!</p>
+            
+            <div class="custom-game-panels">
+                <!-- Home Team Panel -->
+                <div class="team-panel home-panel">
+                    <h3>Home Team</h3>
+                    <div class="team-selector">
+                        <label for="homeYearSelect">Season Year:</label>
+                        <select id="homeYearSelect" class="year-select">
+                            <!-- Years will be populated by JS -->
+                        </select>
+                    </div>
+                    <div class="team-selector">
+                        <label for="homeTeamSelect">Team:</label>
+                        <select id="homeTeamSelect" class="team-select">
+                            <option value="">Select a team...</option>
+                        </select>
+                    </div>
+                    <div id="homeTeamPreview" class="team-preview">
+                        <!-- Team stats preview will appear here -->
+                    </div>
+                </div>
+
+                <!-- VS Divider -->
+                <div class="vs-divider">
+                    <span>VS</span>
+                </div>
+
+                <!-- Away Team Panel -->
+                <div class="team-panel away-panel">
+                    <h3>Away Team</h3>
+                    <div class="team-selector">
+                        <label for="awayYearSelect">Season Year:</label>
+                        <select id="awayYearSelect" class="year-select">
+                            <!-- Years will be populated by JS -->
+                        </select>
+                    </div>
+                    <div class="team-selector">
+                        <label for="awayTeamSelect">Team:</label>
+                        <select id="awayTeamSelect" class="team-select">
+                            <option value="">Select a team...</option>
+                        </select>
+                    </div>
+                    <div id="awayTeamPreview" class="team-preview">
+                        <!-- Team stats preview will appear here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Neutral Site Option -->
+            <div class="neutral-site-option">
+                <label>
+                    <input type="checkbox" id="neutralSiteCheck">
+                    Neutral Site (no home-field advantage)
+                </label>
+            </div>
+
+            <!-- Predict Button -->
+            <div class="predict-button-container">
+                <button id="predictCustomBtn" class="predict-btn">Predict Game</button>
+            </div>
+
+            <!-- Results Container -->
+            <div id="customResultContainer">
+                <!-- Prediction results will appear here -->
+            </div>
         </div>
     </main>
 
