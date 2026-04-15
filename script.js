@@ -93,10 +93,7 @@ async function loadGames() {
         const selection = weekSelect.value;
         let url = `${API_BASE_URL}/api/games`;
         
-        if (selection === 'demo') {
-            url = `${API_BASE_URL}/api/demo/live`;
-            gamesContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Loading Demo Live Games...</div>';
-        } else if (selection === 'full') {
+        if (selection === 'full') {
             url += '?season=full';
             gamesContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Loading Full Season...</div>';
         } else if (selection !== 'current') {
@@ -124,21 +121,19 @@ async function loadGames() {
                 gamesContainer.appendChild(gameCard);
             });
             
-            // if demo mode, show auto-refresh message and start auto-refresh
-            if (data.demo_mode) {
-                const refreshMsg = document.createElement('div');
-                refreshMsg.className = 'demo-refresh-msg';
-                refreshMsg.innerHTML = '🔴 DEMO MODE - Games update every 5 seconds (Full game = ~4.5 min)';
-                gamesContainer.insertBefore(refreshMsg, gamesContainer.firstChild);
-                
-                // auto-refresh every 5 seconds in demo mode
-                startDemoRefresh('nfl');
+            // if current week and any games are live, auto-refresh every 5 seconds
+            const hasLiveGames = data.games.some(g => g.live_data && g.live_data.is_live);
+            if (selection === 'current' && hasLiveGames) {
+                const liveMsg = document.createElement('div');
+                liveMsg.className = 'live-refresh-msg';
+                liveMsg.innerHTML = ' LIVE - Predictions updating every 5 seconds';
+                gamesContainer.insertBefore(liveMsg, gamesContainer.firstChild);
+                startLiveRefresh('nfl');
             } else {
-                stopDemoRefresh('nfl');
+                stopLiveRefresh('nfl');
             }
         } else {
             gamesContainer.innerHTML = '<div class="no-games">No games available for this week.</div>';
-            stopDemoRefresh('nfl');
         }
         
     } catch (error) {
@@ -149,69 +144,73 @@ async function loadGames() {
                 <p>Please make sure the prediction server is running and try again.</p>
             </div>
         `;
-        stopDemoRefresh('nfl');
+        stopLiveRefresh('nfl');
     }
 }
 
-// demo refresh intervals
-let nflDemoInterval = null;
-let nbaDemoInterval = null;
+// live refresh intervals
+let nflLiveInterval = null;
+let nbaLiveInterval = null;
 
-function startDemoRefresh(sport) {
+// track previous scores for animation
+let previousNBAScores = {};
+
+function startLiveRefresh(sport) {
     if (sport === 'nfl') {
-        if (nflDemoInterval) clearInterval(nflDemoInterval);
-        nflDemoInterval = setInterval(() => {
-            if (weekSelect.value === 'demo') {
-                loadGamesQuiet();
+        if (nflLiveInterval) clearInterval(nflLiveInterval);
+        nflLiveInterval = setInterval(() => {
+            if (weekSelect.value === 'current') {
+                loadCurrentGamesQuiet();
             } else {
-                stopDemoRefresh('nfl');
+                stopLiveRefresh('nfl');
             }
         }, 5000);
     } else if (sport === 'nba') {
-        if (nbaDemoInterval) clearInterval(nbaDemoInterval);
-        nbaDemoInterval = setInterval(() => {
-            if (nbaDateSelect.value === 'demo') {
+        if (nbaLiveInterval) clearInterval(nbaLiveInterval);
+        nbaLiveInterval = setInterval(() => {
+            if (nbaDateSelect.value === 'today') {
                 loadNBAGamesQuiet();
             } else {
-                stopDemoRefresh('nba');
+                stopLiveRefresh('nba');
             }
         }, 5000);
     }
 }
 
-function stopDemoRefresh(sport) {
-    if (sport === 'nfl' && nflDemoInterval) {
-        clearInterval(nflDemoInterval);
-        nflDemoInterval = null;
-    } else if (sport === 'nba' && nbaDemoInterval) {
-        clearInterval(nbaDemoInterval);
-        nbaDemoInterval = null;
+function stopLiveRefresh(sport) {
+    if (sport === 'nfl' && nflLiveInterval) {
+        clearInterval(nflLiveInterval);
+        nflLiveInterval = null;
+    } else if (sport === 'nba' && nbaLiveInterval) {
+        clearInterval(nbaLiveInterval);
+        nbaLiveInterval = null;
     }
 }
 
-// quiet reload without loading spinner (for auto-refresh)
-async function loadGamesQuiet() {
+// quiet reload of current week live games without spinner
+async function loadCurrentGamesQuiet() {
     try {
-        const selection = weekSelect.value;
-        let url = `${API_BASE_URL}/api/demo/live`;
-        
-        const response = await fetch(url);
+        const response = await fetch(`${API_BASE_URL}/api/games`);
         if (!response.ok) return;
-        
+
         const data = await response.json();
         if (!data.success || !data.games) return;
-        
-        // keep the demo message
-        const existingMsg = gamesContainer.querySelector('.demo-refresh-msg');
+
+        const hasLiveGames = data.games.some(g => g.live_data && g.live_data.is_live);
+        if (!hasLiveGames) {
+            stopLiveRefresh('nfl');
+        }
+
+        const existingMsg = gamesContainer.querySelector('.live-refresh-msg');
         gamesContainer.innerHTML = '';
         if (existingMsg) gamesContainer.appendChild(existingMsg);
-        
+
         data.games.forEach((game, index) => {
             const gameCard = createGameCard(game, index + 1);
             gamesContainer.appendChild(gameCard);
         });
     } catch (error) {
-        console.error('Error refreshing games:', error);
+        console.error('Error refreshing live games:', error);
     }
 }
 
@@ -673,30 +672,24 @@ async function loadNBAGames() {
         const selection = nbaDateSelect.value;
         let url = `${API_BASE_URL}/api/nba/games`;
         
-        // handle demo mode
-        if (selection === 'demo') {
-            url = `${API_BASE_URL}/api/nba/demo/live`;
-            nbaGamesContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Loading Demo Live Games...</div>';
-        } else {
-            // calculate date based on selection
-            const today = new Date();
-            let dateStr = '';
-            
-            if (selection === 'today') {
-                dateStr = formatDate(today);
-            } else if (selection === 'tomorrow') {
-                const tomorrow = new Date(today);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                dateStr = formatDate(tomorrow);
-            } else if (selection === 'yesterday') {
-                const yesterday = new Date(today);
-                yesterday.setDate(yesterday.getDate() - 1);
-                dateStr = formatDate(yesterday);
-            }
-            
-            if (dateStr) {
-                url += `?date=${dateStr}`;
-            }
+        // calculate date based on selection
+        const today = new Date();
+        let dateStr = '';
+        
+        if (selection === 'today') {
+            dateStr = formatDate(today);
+        } else if (selection === 'tomorrow') {
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            dateStr = formatDate(tomorrow);
+        } else if (selection === 'yesterday') {
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            dateStr = formatDate(yesterday);
+        }
+        
+        if (dateStr) {
+            url += `?date=${dateStr}`;
         }
         
         const response = await fetch(url);
@@ -715,25 +708,35 @@ async function loadNBAGames() {
         
         // show each game
         if (data.games && data.games.length > 0) {
+            // initialize score tracking for animations
+            previousNBAScores = {};
+            data.games.forEach(game => {
+                const liveData = game.live_data || {};
+                previousNBAScores[game.game_id] = {
+                    home: liveData.home_score || 0,
+                    away: liveData.away_score || 0
+                };
+            });
+            
             data.games.forEach((game, index) => {
                 const gameCard = createNBAGameCard(game, index + 1);
                 nbaGamesContainer.appendChild(gameCard);
             });
             
-            // if demo mode, show auto-refresh message and start auto-refresh
-            if (data.demo_mode) {
-                const refreshMsg = document.createElement('div');
-                refreshMsg.className = 'demo-refresh-msg';
-                refreshMsg.innerHTML = '🔴 DEMO MODE - Games update every 5 seconds (Full game = ~5 min)';
-                nbaGamesContainer.insertBefore(refreshMsg, nbaGamesContainer.firstChild);
-                
-                startDemoRefresh('nba');
+            // if today and any games are live, auto-refresh every 5 seconds
+            const hasLiveGames = data.games.some(g => g.live_data && g.live_data.is_live);
+            if (selection === 'today' && hasLiveGames) {
+                const liveMsg = document.createElement('div');
+                liveMsg.className = 'live-refresh-msg';
+                liveMsg.innerHTML = ' LIVE - Predictions updating every 5 seconds';
+                nbaGamesContainer.insertBefore(liveMsg, nbaGamesContainer.firstChild);
+                startLiveRefresh('nba');
             } else {
-                stopDemoRefresh('nba');
+                stopLiveRefresh('nba');
             }
         } else {
             nbaGamesContainer.innerHTML = '<div class="no-games">No NBA games available for this date.</div>';
-            stopDemoRefresh('nba');
+            stopLiveRefresh('nba');
         }
         
     } catch (error) {
@@ -744,28 +747,49 @@ async function loadNBAGames() {
                 <p>Please make sure the prediction server is running and try again.</p>
             </div>
         `;
-        stopDemoRefresh('nba');
+        stopLiveRefresh('nba');
     }
 }
 
-// quiet reload for NBA without loading spinner (for auto-refresh)
+// quiet reload for NBA without loading spinner
 async function loadNBAGamesQuiet() {
     try {
-        let url = `${API_BASE_URL}/api/nba/demo/live`;
-        
-        const response = await fetch(url);
+        const today = new Date();
+        const dateStr = formatDate(today);
+        const response = await fetch(`${API_BASE_URL}/api/nba/games?date=${dateStr}`);
         if (!response.ok) return;
-        
+
         const data = await response.json();
         if (!data.success || !data.games) return;
-        
-        // keep the demo message
-        const existingMsg = nbaGamesContainer.querySelector('.demo-refresh-msg');
+
+        const hasLiveGames = data.games.some(g => g.live_data && g.live_data.is_live);
+        if (!hasLiveGames) {
+            stopLiveRefresh('nba');
+        }
+
+        // check for score changes before rebuilding
+        const scoreChanges = {};
+        data.games.forEach(game => {
+            const gameId = game.game_id;
+            const liveData = game.live_data || {};
+            const homeScore = liveData.home_score || 0;
+            const awayScore = liveData.away_score || 0;
+            
+            if (previousNBAScores[gameId]) {
+                scoreChanges[gameId] = {
+                    homeIncreased: homeScore > previousNBAScores[gameId].home,
+                    awayIncreased: awayScore > previousNBAScores[gameId].away
+                };
+            }
+            previousNBAScores[gameId] = { home: homeScore, away: awayScore };
+        });
+
+        const existingMsg = nbaGamesContainer.querySelector('.live-refresh-msg');
         nbaGamesContainer.innerHTML = '';
         if (existingMsg) nbaGamesContainer.appendChild(existingMsg);
-        
+
         data.games.forEach((game, index) => {
-            const gameCard = createNBAGameCard(game, index + 1);
+            const gameCard = createNBAGameCard(game, index + 1, scoreChanges[game.game_id]);
             nbaGamesContainer.appendChild(gameCard);
         });
     } catch (error) {
@@ -782,7 +806,7 @@ function formatDate(date) {
 }
 
 // builds the html for each nba game card
-function createNBAGameCard(game, gameNumber) {
+function createNBAGameCard(game, gameNumber, scoreChanges = null) {
     const card = document.createElement('div');
     card.className = 'game-card nba-game-card';
     
@@ -790,6 +814,10 @@ function createNBAGameCard(game, gameNumber) {
     const liveData = game.live_data || {};
     const isLive = liveData.is_live || false;
     const isFinal = liveData.is_final || false;
+    
+    // check for score animations
+    const homeScoreClass = scoreChanges?.homeIncreased ? 'score score-increased' : 'score';
+    const awayScoreClass = scoreChanges?.awayIncreased ? 'score score-increased' : 'score';
 
     // make the date look nice
     let dateStr = '';
@@ -820,9 +848,9 @@ function createNBAGameCard(game, gameNumber) {
         statusBadge = '<div class="status-badge live-badge">LIVE</div>';
         liveScoreDisplay = `
             <div class="live-score">
-                <span class="score">${liveData.home_score || 0}</span>
+                <span class="${homeScoreClass}">${liveData.home_score || 0}</span>
                 <span class="score-separator">-</span>
-                <span class="score">${liveData.away_score || 0}</span>
+                <span class="${awayScoreClass}">${liveData.away_score || 0}</span>
             </div>
             <div class="game-clock">Q${liveData.period || 1} - ${liveData.clock || '12:00'}</div>
         `;
