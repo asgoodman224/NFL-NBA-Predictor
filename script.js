@@ -26,6 +26,20 @@ const awayTeamPreview = document.getElementById('awayTeamPreview');
 const predictCustomBtn = document.getElementById('predictCustomBtn');
 const customResultContainer = document.getElementById('customResultContainer');
 
+// custom NBA game elements
+const nflCustomTabBtn = document.getElementById('nflCustomTabBtn');
+const nbaCustomTabBtn = document.getElementById('nbaCustomTabBtn');
+const nflCustomSection = document.getElementById('nflCustomSection');
+const nbaCustomSection = document.getElementById('nbaCustomSection');
+const nbaHomeYearSelect = document.getElementById('nbaHomeYearSelect');
+const nbaHomeTeamSelect = document.getElementById('nbaHomeTeamSelect');
+const nbaAwayYearSelect = document.getElementById('nbaAwayYearSelect');
+const nbaAwayTeamSelect = document.getElementById('nbaAwayTeamSelect');
+const nbaHomeTeamPreview = document.getElementById('nbaHomeTeamPreview');
+const nbaAwayTeamPreview = document.getElementById('nbaAwayTeamPreview');
+const predictNBACustomBtn = document.getElementById('predictNBACustomBtn');
+const nbaCustomResultContainer = document.getElementById('nbaCustomResultContainer');
+
 // where the server is running
 const API_BASE_URL = window.location.origin;
 
@@ -73,11 +87,18 @@ function showCustomGamePage() {
     gamesContainer.style.display = 'none';
     nbaContainer.style.display = 'none';
     customGameContainer.style.display = 'block';
-    
-    // initialize year dropdowns if not already done
-    if (homeYearSelect.options.length <= 1) {
+
+    // initialize nfl dropdowns if not already done
+    if (homeYearSelect && homeYearSelect.options.length <= 1) {
         populateYearDropdowns();
     }
+
+    // initialize nba dropdowns if not already done
+    if (nbaHomeYearSelect && nbaHomeYearSelect.options.length <= 1) {
+        populateNBAYearDropdowns();
+    }
+
+    showCustomLeagueTab('nfl');
 }
 
 // when they click load games
@@ -154,6 +175,19 @@ let nbaLiveInterval = null;
 
 // track previous scores for animation
 let previousNBAScores = {};
+
+function showCustomLeagueTab(league) {
+    if (!nflCustomSection || !nbaCustomSection || !nflCustomTabBtn || !nbaCustomTabBtn) {
+        return;
+    }
+
+    const isNFL = league === 'nfl';
+    nflCustomSection.style.display = isNFL ? 'block' : 'none';
+    nbaCustomSection.style.display = isNFL ? 'none' : 'block';
+
+    nflCustomTabBtn.classList.toggle('active', isNFL);
+    nbaCustomTabBtn.classList.toggle('active', !isNFL);
+}
 
 function startLiveRefresh(sport) {
     if (sport === 'nfl') {
@@ -635,26 +669,330 @@ function displayCustomResult(prediction) {
     `;
 }
 
+function populateNBAYearDropdowns() {
+    const currentYear = 2026;
+    const startYear = 1946;
+
+    for (let year = currentYear; year >= startYear; year--) {
+        const homeOption = document.createElement('option');
+        homeOption.value = year;
+        homeOption.textContent = year;
+        nbaHomeYearSelect.appendChild(homeOption);
+
+        const awayOption = document.createElement('option');
+        awayOption.value = year;
+        awayOption.textContent = year;
+        nbaAwayYearSelect.appendChild(awayOption);
+    }
+
+    nbaHomeYearSelect.value = currentYear;
+    nbaAwayYearSelect.value = currentYear;
+
+    loadNBATeamsForYear(nbaHomeYearSelect, nbaHomeTeamSelect, currentYear);
+    loadNBATeamsForYear(nbaAwayYearSelect, nbaAwayTeamSelect, currentYear);
+}
+
+async function loadNBATeamsForYear(yearSelect, teamSelect, year) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/nba/teams/year/${year}`);
+        const data = await response.json();
+
+        if (data.success && data.teams) {
+            teamSelect.innerHTML = '<option value="">Select a team...</option>';
+            data.teams.forEach(team => {
+                const option = document.createElement('option');
+                option.value = team.abbreviation;
+                option.textContent = team.name;
+                teamSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading NBA teams:', error);
+    }
+}
+
+async function loadNBATeamPreview(teamAbbr, year, previewContainer) {
+    if (!teamAbbr) {
+        previewContainer.innerHTML = '<div class="team-preview-empty">Select a team to see stats</div>';
+        return;
+    }
+
+    previewContainer.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    previewContainer.classList.add('loading');
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/nba/teams/${teamAbbr}/stats?year=${year}`);
+        const data = await response.json();
+
+        previewContainer.classList.remove('loading');
+
+        if (data.success && data.stats) {
+            const stats = data.stats;
+            const logoUrl = `https://a.espncdn.com/i/teamlogos/nba/500/${teamAbbr.toLowerCase()}.png`;
+
+            previewContainer.innerHTML = `
+                <div class="team-preview-content">
+                    <img src="${logoUrl}" alt="${teamAbbr}" class="team-preview-logo" onerror="this.style.display='none'">
+                    <div class="team-preview-name">${stats.team} (${stats.year})</div>
+                    <div class="team-preview-stats">
+                        <div class="preview-stat">
+                            <div class="preview-stat-label">Record</div>
+                            <div class="preview-stat-value">${stats.wins}-${stats.losses}</div>
+                        </div>
+                        <div class="preview-stat">
+                            <div class="preview-stat-label">Win %</div>
+                            <div class="preview-stat-value">${(stats.win_pct * 100).toFixed(1)}%</div>
+                        </div>
+                        <div class="preview-stat">
+                            <div class="preview-stat-label">PPG</div>
+                            <div class="preview-stat-value">${stats.ppg.toFixed(1)}</div>
+                        </div>
+                        <div class="preview-stat">
+                            <div class="preview-stat-label">PPG Allowed</div>
+                            <div class="preview-stat-value">${stats.ppg_allowed.toFixed(1)}</div>
+                        </div>
+                    </div>
+                    ${!stats.found ? '<div class="data-disclaimer">* Estimated stats</div>' : ''}
+                </div>
+            `;
+        } else {
+            previewContainer.innerHTML = `<div class="team-preview-empty">${data.error || 'Unable to load stats'}</div>`;
+        }
+    } catch (error) {
+        console.error('Error loading NBA team preview:', error);
+        previewContainer.classList.remove('loading');
+        previewContainer.innerHTML = '<div class="team-preview-empty">Error loading stats</div>';
+    }
+}
+
+async function predictNBACustomGame() {
+    const homeTeam = nbaHomeTeamSelect.value;
+    const homeYear = parseInt(nbaHomeYearSelect.value);
+    const awayTeam = nbaAwayTeamSelect.value;
+    const awayYear = parseInt(nbaAwayYearSelect.value);
+
+    if (!homeTeam || !awayTeam) {
+        nbaCustomResultContainer.innerHTML = `
+            <div class="error-message">
+                <h3>Select Both Teams</h3>
+                <p>Please select a team for both home and away sides.</p>
+            </div>
+        `;
+        return;
+    }
+
+    if (homeTeam === awayTeam && homeYear === awayYear) {
+        nbaCustomResultContainer.innerHTML = `
+            <div class="error-message">
+                <h3>Same Team Selected</h3>
+                <p>Please select different teams or different years.</p>
+            </div>
+        `;
+        return;
+    }
+
+    predictNBACustomBtn.disabled = true;
+    predictNBACustomBtn.textContent = 'Predicting...';
+    nbaCustomResultContainer.innerHTML = '<div class="loading"><div class="spinner"></div>Analyzing matchup...</div>';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/nba/predict/custom`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                home_team: homeTeam,
+                home_year: homeYear,
+                away_team: awayTeam,
+                away_year: awayYear,
+                neutral_site: false
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.prediction) {
+            displayNBACustomResult(data.prediction);
+        } else {
+            nbaCustomResultContainer.innerHTML = `
+                <div class="error-message">
+                    <h3>Prediction Error</h3>
+                    <p>${data.error || 'Unable to generate prediction'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error predicting NBA game:', error);
+        nbaCustomResultContainer.innerHTML = `
+            <div class="error-message">
+                <h3>Connection Error</h3>
+                <p>Please make sure the prediction server is running.</p>
+            </div>
+        `;
+    } finally {
+        predictNBACustomBtn.disabled = false;
+        predictNBACustomBtn.textContent = 'Predict NBA Game';
+    }
+}
+
+function displayNBACustomResult(prediction) {
+    const home = prediction.home_team;
+    const away = prediction.away_team;
+    const pred = prediction.prediction;
+
+    const homeRating = Number.isFinite(home.rating) ? home.rating.toFixed(1) : 'N/A';
+    const awayRating = Number.isFinite(away.rating) ? away.rating.toFixed(1) : 'N/A';
+    const homePointDiff = Number.isFinite(home.point_diff) ? `${home.point_diff > 0 ? '+' : ''}${home.point_diff.toFixed(1)}` : 'N/A';
+    const awayPointDiff = Number.isFinite(away.point_diff) ? `${away.point_diff > 0 ? '+' : ''}${away.point_diff.toFixed(1)}` : 'N/A';
+
+    nbaCustomResultContainer.innerHTML = `
+        <div class="custom-result">
+            <div class="custom-result-header">
+                <h3>NBA Prediction Result</h3>
+            </div>
+
+            <div class="custom-result-matchup">
+                <div class="result-team">
+                    <img src="https://a.espncdn.com/i/teamlogos/nba/500/${home.abbreviation.toLowerCase()}.png"
+                         alt="${home.abbreviation}"
+                         style="width: 50px; height: 50px; margin-bottom: 0.5rem;"
+                         onerror="this.style.display='none'">
+                    <div class="result-team-name">${home.name}</div>
+                    <div class="result-team-year">${home.year} Season</div>
+                    <div class="result-team-record">${home.record} (${home.win_pct}%)</div>
+                    <div class="result-team-rating">
+                        <span class="rating-label">Power Rating:</span>
+                        <span class="rating-value">${homeRating}</span>
+                    </div>
+                    <div class="result-team-diff">Point Diff: ${homePointDiff}/game</div>
+                </div>
+
+                <div class="result-vs">VS</div>
+
+                <div class="result-team">
+                    <img src="https://a.espncdn.com/i/teamlogos/nba/500/${away.abbreviation.toLowerCase()}.png"
+                         alt="${away.abbreviation}"
+                         style="width: 50px; height: 50px; margin-bottom: 0.5rem;"
+                         onerror="this.style.display='none'">
+                    <div class="result-team-name">${away.name}</div>
+                    <div class="result-team-year">${away.year} Season</div>
+                    <div class="result-team-record">${away.record} (${away.win_pct}%)</div>
+                    <div class="result-team-rating">
+                        <span class="rating-label">Power Rating:</span>
+                        <span class="rating-value">${awayRating}</span>
+                    </div>
+                    <div class="result-team-diff">Point Diff: ${awayPointDiff}/game</div>
+                </div>
+            </div>
+
+            <div class="custom-result-prediction">
+                <div class="prediction-winner-label">Predicted Winner</div>
+                <div class="prediction-winner-name">${pred.winner}</div>
+                <div class="prediction-details">
+                    <div class="prediction-detail">
+                        <div class="prediction-detail-label">Win Probability</div>
+                        <div class="prediction-detail-value confidence-${pred.confidence >= 70 ? 'high' : pred.confidence >= 55 ? 'medium' : 'low'}">${pred.confidence}%</div>
+                    </div>
+                    <div class="prediction-detail">
+                        <div class="prediction-detail-label">Predicted Score</div>
+                        <div class="prediction-detail-value">${pred.predicted_score}</div>
+                    </div>
+                    <div class="prediction-detail">
+                        <div class="prediction-detail-label">Spread</div>
+                        <div class="prediction-detail-value">${pred.spread || 'N/A'}</div>
+                    </div>
+                    <div class="prediction-detail">
+                        <div class="prediction-detail-label">Home Advantage</div>
+                        <div class="prediction-detail-value">+3.5 pts</div>
+                    </div>
+                </div>
+            </div>
+
+            ${pred.analysis ? `
+            <div class="custom-result-analysis">
+                <h4>Matchup Analysis</h4>
+                <p>${pred.analysis}</p>
+            </div>
+            ` : ''}
+
+            ${(!home.data_found || !away.data_found) ? `
+            <div class="data-disclaimer">
+                * Some statistics are estimated due to limited historical data
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
 // event listeners for custom game predictor
-homeYearSelect.addEventListener('change', () => {
-    loadTeamsForYear(homeYearSelect, homeTeamSelect, homeYearSelect.value);
-    homeTeamPreview.innerHTML = '<div class="team-preview-empty">Select a team to see stats</div>';
-});
+if (homeYearSelect) {
+    homeYearSelect.addEventListener('change', () => {
+        loadTeamsForYear(homeYearSelect, homeTeamSelect, homeYearSelect.value);
+        homeTeamPreview.innerHTML = '<div class="team-preview-empty">Select a team to see stats</div>';
+    });
+}
 
-awayYearSelect.addEventListener('change', () => {
-    loadTeamsForYear(awayYearSelect, awayTeamSelect, awayYearSelect.value);
-    awayTeamPreview.innerHTML = '<div class="team-preview-empty">Select a team to see stats</div>';
-});
+if (awayYearSelect) {
+    awayYearSelect.addEventListener('change', () => {
+        loadTeamsForYear(awayYearSelect, awayTeamSelect, awayYearSelect.value);
+        awayTeamPreview.innerHTML = '<div class="team-preview-empty">Select a team to see stats</div>';
+    });
+}
 
-homeTeamSelect.addEventListener('change', () => {
-    loadTeamPreview(homeTeamSelect.value, homeYearSelect.value, homeTeamPreview);
-});
+if (homeTeamSelect) {
+    homeTeamSelect.addEventListener('change', () => {
+        loadTeamPreview(homeTeamSelect.value, homeYearSelect.value, homeTeamPreview);
+    });
+}
 
-awayTeamSelect.addEventListener('change', () => {
-    loadTeamPreview(awayTeamSelect.value, awayYearSelect.value, awayTeamPreview);
-});
+if (awayTeamSelect) {
+    awayTeamSelect.addEventListener('change', () => {
+        loadTeamPreview(awayTeamSelect.value, awayYearSelect.value, awayTeamPreview);
+    });
+}
 
-predictCustomBtn.addEventListener('click', predictCustomGame);
+if (predictCustomBtn) {
+    predictCustomBtn.addEventListener('click', predictCustomGame);
+}
+
+if (nflCustomTabBtn) {
+    nflCustomTabBtn.addEventListener('click', () => showCustomLeagueTab('nfl'));
+}
+
+if (nbaCustomTabBtn) {
+    nbaCustomTabBtn.addEventListener('click', () => showCustomLeagueTab('nba'));
+}
+
+if (nbaHomeYearSelect) {
+    nbaHomeYearSelect.addEventListener('change', () => {
+        loadNBATeamsForYear(nbaHomeYearSelect, nbaHomeTeamSelect, nbaHomeYearSelect.value);
+        nbaHomeTeamPreview.innerHTML = '<div class="team-preview-empty">Select a team to see stats</div>';
+    });
+}
+
+if (nbaAwayYearSelect) {
+    nbaAwayYearSelect.addEventListener('change', () => {
+        loadNBATeamsForYear(nbaAwayYearSelect, nbaAwayTeamSelect, nbaAwayYearSelect.value);
+        nbaAwayTeamPreview.innerHTML = '<div class="team-preview-empty">Select a team to see stats</div>';
+    });
+}
+
+if (nbaHomeTeamSelect) {
+    nbaHomeTeamSelect.addEventListener('change', () => {
+        loadNBATeamPreview(nbaHomeTeamSelect.value, nbaHomeYearSelect.value, nbaHomeTeamPreview);
+    });
+}
+
+if (nbaAwayTeamSelect) {
+    nbaAwayTeamSelect.addEventListener('change', () => {
+        loadNBATeamPreview(nbaAwayTeamSelect.value, nbaAwayYearSelect.value, nbaAwayTeamPreview);
+    });
+}
+
+if (predictNBACustomBtn) {
+    predictNBACustomBtn.addEventListener('click', predictNBACustomGame);
+}
 
 // ========== NBA PREDICTOR FUNCTIONS ==========
 

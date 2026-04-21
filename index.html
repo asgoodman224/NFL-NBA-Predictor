@@ -65,8 +65,14 @@
         <!-- Custom Game Predictor Section (hidden by default) -->
         <div id="customGameContainer">
             <h2 class="custom-game-title">Custom Historical Matchup</h2>
-            <p class="custom-game-subtitle">Pick any NFL team from any year (1970-present) against another!</p>
-            
+            <p class="custom-game-subtitle">Pick historical NFL or NBA teams from any season and run a matchup prediction.</p>
+
+            <div class="custom-league-switcher">
+                <button id="nflCustomTabBtn" class="predict-btn custom-tab-btn active">NFL Custom</button>
+                <button id="nbaCustomTabBtn" class="predict-btn custom-tab-btn">NBA Custom</button>
+            </div>
+
+            <div id="nflCustomSection">
             <div class="custom-game-panels">
                 <!-- Home Team Panel -->
                 <div class="team-panel home-panel">
@@ -122,6 +128,51 @@
             <!-- Results Container -->
             <div id="customResultContainer">
                 <!-- Prediction results will appear here -->
+            </div>
+            </div>
+
+            <div id="nbaCustomSection" style="display:none;">
+                <div class="custom-game-panels">
+                    <div class="team-panel home-panel">
+                        <h3>Home Team</h3>
+                        <div class="team-selector">
+                            <label for="nbaHomeYearSelect">Season Year:</label>
+                            <select id="nbaHomeYearSelect" class="year-select"></select>
+                        </div>
+                        <div class="team-selector">
+                            <label for="nbaHomeTeamSelect">Team:</label>
+                            <select id="nbaHomeTeamSelect" class="team-select">
+                                <option value="">Select a team...</option>
+                            </select>
+                        </div>
+                        <div id="nbaHomeTeamPreview" class="team-preview"></div>
+                    </div>
+
+                    <div class="vs-divider">
+                        <span>VS</span>
+                    </div>
+
+                    <div class="team-panel away-panel">
+                        <h3>Away Team</h3>
+                        <div class="team-selector">
+                            <label for="nbaAwayYearSelect">Season Year:</label>
+                            <select id="nbaAwayYearSelect" class="year-select"></select>
+                        </div>
+                        <div class="team-selector">
+                            <label for="nbaAwayTeamSelect">Team:</label>
+                            <select id="nbaAwayTeamSelect" class="team-select">
+                                <option value="">Select a team...</option>
+                            </select>
+                        </div>
+                        <div id="nbaAwayTeamPreview" class="team-preview"></div>
+                    </div>
+                </div>
+
+                <div class="predict-button-container">
+                    <button id="predictNBACustomBtn" class="predict-btn">Predict NBA Game</button>
+                </div>
+
+                <div id="nbaCustomResultContainer"></div>
             </div>
         </div>
     </main>

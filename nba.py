@@ -251,6 +251,134 @@ class NBAPredictor:
             if games > 0:
                 return team.get('points_against', 0) / games
         return 110.0  # league average
+
+    def get_historical_team_stats(self, team_abbr, year):
+        """gets a team's stats for a specific NBA season with fallback estimates"""
+        standings = self.get_standings(year)
+        team_data = standings.get(team_abbr, {}) if standings else {}
+
+        if team_data:
+            wins = team_data.get('wins', 0)
+            losses = team_data.get('losses', 0)
+            total_games = wins + losses
+
+            if total_games > 0:
+                points_for = team_data.get('points_for', 0)
+                points_against = team_data.get('points_against', 0)
+                ppg = points_for / total_games if points_for > 0 else 110.0
+                ppg_allowed = points_against / total_games if points_against > 0 else 110.0
+                point_diff = ppg - ppg_allowed
+
+                return {
+                    'team': self.NBA_TEAMS[team_abbr]['name'],
+                    'abbreviation': team_abbr,
+                    'year': year,
+                    'wins': wins,
+                    'losses': losses,
+                    'win_pct': wins / total_games,
+                    'ppg': ppg,
+                    'ppg_allowed': ppg_allowed,
+                    'point_diff': point_diff,
+                    'found': True
+                }
+
+        # fallback estimate when season standings are unavailable
+        team_elo = self.get_team_elo(team_abbr)
+        elo_delta = team_elo - self.BASE_ELO
+        estimated_win_pct = max(0.2, min(0.8, 0.5 + (elo_delta / 800)))
+        estimated_wins = round(estimated_win_pct * 82)
+        estimated_losses = 82 - estimated_wins
+        estimated_ppg = 110 + (elo_delta / 50)
+        estimated_ppg_allowed = 110 - (elo_delta / 60)
+
+        return {
+            'team': self.NBA_TEAMS[team_abbr]['name'],
+            'abbreviation': team_abbr,
+            'year': year,
+            'wins': estimated_wins,
+            'losses': estimated_losses,
+            'win_pct': estimated_win_pct,
+            'ppg': estimated_ppg,
+            'ppg_allowed': estimated_ppg_allowed,
+            'point_diff': estimated_ppg - estimated_ppg_allowed,
+            'found': False
+        }
+
+    def predict_custom_game(self, home_team, home_year, away_team, away_year, neutral_site=False):
+        """predicts a custom historical NBA matchup between any two teams"""
+        home_stats = self.get_historical_team_stats(home_team, home_year)
+        away_stats = self.get_historical_team_stats(away_team, away_year)
+
+        # blend season strength and point differential into a power rating
+        home_rating = (home_stats['win_pct'] * 100) + (home_stats['point_diff'] * 1.8)
+        away_rating = (away_stats['win_pct'] * 100) + (away_stats['point_diff'] * 1.8)
+
+        if not neutral_site:
+            home_rating += 3.5  # NBA home-court advantage
+
+        rating_diff = home_rating - away_rating
+        home_win_prob = 1 / (1 + math.exp(-rating_diff / 8.0))
+
+        if home_win_prob >= 0.5:
+            winner = home_stats['team']
+            confidence = round(home_win_prob * 100, 1)
+        else:
+            winner = away_stats['team']
+            confidence = round((1 - home_win_prob) * 100, 1)
+
+        confidence = max(50.0, min(99.0, confidence))
+
+        # score model around tempo/scoring environment of both teams
+        home_score = round((home_stats['ppg'] + away_stats['ppg_allowed']) / 2)
+        away_score = round((away_stats['ppg'] + home_stats['ppg_allowed']) / 2)
+
+        if not neutral_site:
+            home_score += 2
+
+        # enforce winner alignment with probability
+        if home_win_prob >= 0.5 and home_score <= away_score:
+            home_score = away_score + 3
+        elif home_win_prob < 0.5 and away_score <= home_score:
+            away_score = home_score + 3
+
+        home_score = max(85, min(145, home_score))
+        away_score = max(85, min(145, away_score))
+
+        spread = f"{home_stats['team']} {'-' if home_win_prob >= 0.5 else '+'}{abs(round((home_score - away_score), 1))}"
+
+        return {
+            'home_team': {
+                'name': home_stats['team'],
+                'abbreviation': home_team,
+                'year': home_year,
+                'record': f"{home_stats['wins']}-{home_stats['losses']}",
+                'win_pct': round(home_stats['win_pct'] * 100, 1),
+                'rating': round(home_rating, 1),
+                'point_diff': round(home_stats['point_diff'], 1),
+                'data_found': home_stats['found']
+            },
+            'away_team': {
+                'name': away_stats['team'],
+                'abbreviation': away_team,
+                'year': away_year,
+                'record': f"{away_stats['wins']}-{away_stats['losses']}",
+                'win_pct': round(away_stats['win_pct'] * 100, 1),
+                'rating': round(away_rating, 1),
+                'point_diff': round(away_stats['point_diff'], 1),
+                'data_found': away_stats['found']
+            },
+            'prediction': {
+                'winner': winner,
+                'confidence': confidence,
+                'predicted_score': f"{home_score}-{away_score}",
+                'spread': spread,
+                'neutral_site': neutral_site,
+                'analysis': (
+                    f"{home_stats['team']} ({home_year}) vs {away_stats['team']} ({away_year}): "
+                    f"home win probability {round(home_win_prob * 100, 1)}%."
+                )
+            }
+        }
     
     def get_recent_form(self, team_abbr):
         """checks if a team is hot or cold lately"""
@@ -825,6 +953,83 @@ def get_nba_teams():
         }), 500
 
 
+@nba_bp.route('/api/nba/teams/year/<int:year>', methods=['GET'])
+def get_nba_teams_by_year(year):
+    """returns NBA teams that existed in a given year"""
+    try:
+        if year < 1946 or year > 2026:
+            return jsonify({
+                'success': False,
+                'error': 'Year must be between 1946 and 2026'
+            }), 400
+
+        teams = []
+        for abbr, info in nba_predictor.NBA_TEAMS.items():
+            if info.get('founded', 9999) <= year:
+                teams.append({
+                    'abbreviation': abbr,
+                    'name': info['name'],
+                    'city': info['city'],
+                    'founded': info['founded'],
+                    'logo': f"https://a.espncdn.com/i/teamlogos/nba/500/{abbr.lower()}.png"
+                })
+
+        return jsonify({
+            'success': True,
+            'count': len(teams),
+            'year': year,
+            'teams': sorted(teams, key=lambda x: x['name'])
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@nba_bp.route('/api/nba/teams/<abbr>/stats', methods=['GET'])
+def get_nba_team_historical_stats(abbr):
+    """returns NBA team stats for a specific year"""
+    try:
+        year = request.args.get('year', type=int)
+        if not year:
+            return jsonify({
+                'success': False,
+                'error': 'Year parameter is required'
+            }), 400
+
+        if year < 1946 or year > 2026:
+            return jsonify({
+                'success': False,
+                'error': 'Year must be between 1946 and 2026'
+            }), 400
+
+        abbr = abbr.upper()
+        if abbr not in nba_predictor.NBA_TEAMS:
+            return jsonify({
+                'success': False,
+                'error': f'Unknown team abbreviation: {abbr}'
+            }), 400
+
+        team_info = nba_predictor.NBA_TEAMS[abbr]
+        if team_info['founded'] > year:
+            return jsonify({
+                'success': False,
+                'error': f"{team_info['name']} didn't exist in {year}. Team founded in {team_info['founded']}."
+            }), 400
+
+        stats = nba_predictor.get_historical_team_stats(abbr, year)
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @nba_bp.route('/api/nba/standings', methods=['GET'])
 def get_nba_standings():
     """returns current nba standings"""
@@ -866,6 +1071,70 @@ def get_nba_elo_ratings():
             'home_advantage': nba_predictor.HOME_ADVANTAGE,
             'count': len(ratings),
             'ratings': ratings
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@nba_bp.route('/api/nba/predict/custom', methods=['POST'])
+def predict_nba_custom_game():
+    """predicts a custom historical NBA matchup"""
+    try:
+        data = request.json
+
+        home_team = data.get('home_team', '').upper()
+        away_team = data.get('away_team', '').upper()
+        home_year = int(data.get('home_year', 2026))
+        away_year = int(data.get('away_year', 2026))
+        neutral_site = data.get('neutral_site', False)
+
+        if home_team not in nba_predictor.NBA_TEAMS:
+            return jsonify({
+                'success': False,
+                'error': f'Unknown home team: {home_team}'
+            }), 400
+
+        if away_team not in nba_predictor.NBA_TEAMS:
+            return jsonify({
+                'success': False,
+                'error': f'Unknown away team: {away_team}'
+            }), 400
+
+        if home_year < 1946 or home_year > 2026:
+            return jsonify({
+                'success': False,
+                'error': 'Home year must be between 1946 and 2026'
+            }), 400
+
+        if away_year < 1946 or away_year > 2026:
+            return jsonify({
+                'success': False,
+                'error': 'Away year must be between 1946 and 2026'
+            }), 400
+
+        home_info = nba_predictor.NBA_TEAMS[home_team]
+        away_info = nba_predictor.NBA_TEAMS[away_team]
+
+        if home_info['founded'] > home_year:
+            return jsonify({
+                'success': False,
+                'error': f"{home_info['name']} didn't exist in {home_year}. Team founded in {home_info['founded']}."
+            }), 400
+
+        if away_info['founded'] > away_year:
+            return jsonify({
+                'success': False,
+                'error': f"{away_info['name']} didn't exist in {away_year}. Team founded in {away_info['founded']}."
+            }), 400
+
+        prediction = nba_predictor.predict_custom_game(home_team, home_year, away_team, away_year, neutral_site)
+
+        return jsonify({
+            'success': True,
+            'prediction': prediction
         })
     except Exception as e:
         return jsonify({

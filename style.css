@@ -528,6 +528,24 @@ footer p {
     font-size: 1.1rem;
 }
 
+.custom-league-switcher {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.custom-tab-btn {
+    min-width: 150px;
+    opacity: 0.75;
+}
+
+.custom-tab-btn.active {
+    opacity: 1;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+
 .custom-game-panels {
     display: flex;
     justify-content: center;
